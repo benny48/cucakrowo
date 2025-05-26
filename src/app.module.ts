@@ -12,6 +12,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { RedisModule } from './redis/redis.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { LeaveModule } from './leave/leave.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     RedisModule,
     ConfigModule.forRoot(),
     ScheduleModule.forRoot(),
+    LeaveModule,
   ],
   controllers: [AppController],
   providers: [

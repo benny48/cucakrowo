@@ -55,6 +55,53 @@ type Attendance {
   attendace_image: String
 }
 
+type LeaveType {
+  id: ID!
+  name: String!
+}
+
+"""Leave Request Entity"""
+type LeaveEntity {
+  """Unique ID"""
+  id: Int!
+
+  """Description of the leave request"""
+  name: String
+
+  """Employee ID requesting the leave"""
+  employee_id: Int!
+
+  """Leave type ID"""
+  holiday_status_id: Int!
+
+  """Requested start date (YYYY-MM-DD)"""
+  request_date_from: String!
+
+  """Requested end date (YYYY-MM-DD)"""
+  request_date_to: String!
+
+  """Computed start date and time of the leave"""
+  date_from: String!
+
+  """Computed end date and time of the leave"""
+  date_to: String!
+
+  """Duration in days"""
+  number_of_days: Float!
+
+  """Current state of the leave request"""
+  state: String!
+
+  """Reason for the leave request"""
+  notes: String
+
+  """Employee name"""
+  employee_name: String
+
+  """Leave type name"""
+  leave_type_name: String
+}
+
 type Query {
   getAttendanceByEmployeeIdToday(employeeId: Int!): [Attendance!]!
   employees: [Employee!]!
@@ -65,11 +112,17 @@ type Query {
     """Trainer password"""
     password: String!
   ): EmployeeEntity!
+  leaves(employee_id: Int): [LeaveEntity!]!
+  leaveTypes: [LeaveType!]!
+  leave(id: Int!): LeaveEntity!
 }
 
 type Mutation {
   createAttendance(input: CreateAttendanceDto!): Int!
   createEmployee(name: String!, job_title: String!): Employee!
+  createLeaveRequest(employee_id: Int!, holiday_status_id: Int!, request_date_from: String!, request_date_to: String!, notes: String): LeaveEntity!
+  approveLeaveRequest(id: Int!): LeaveEntity!
+  refuseLeaveRequest(id: Int!): LeaveEntity!
 }
 
 input CreateAttendanceDto {
