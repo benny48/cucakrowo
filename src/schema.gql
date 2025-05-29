@@ -104,6 +104,7 @@ type LeaveEntity {
 
 type Query {
   getAttendanceByEmployeeIdToday(employeeId: Int!): [Attendance!]!
+  getAttendanceByDateRange(startDate: String!, endDate: String!, employeeId: Int): [Attendance!]!
   employees: [Employee!]!
   validateEmployee(
     """Trainer username"""
