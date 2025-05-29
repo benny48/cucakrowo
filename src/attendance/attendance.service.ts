@@ -162,23 +162,38 @@ export class AttendanceService {
   async getAttendanceByDateRange(
     startDate: string,
     endDate: string,
+    employeeId?: number, // Tambahan optional
   ): Promise<any> {
-    const cacheKey = `attendance:range:${startDate}:${endDate}`;
+    const cacheKey = employeeId
+      ? `attendance:range:${startDate}:${endDate}:emp:${employeeId}`
+      : `attendance:range:${startDate}:${endDate}`;
     const cachedData = await this.redisService.get(cacheKey);
 
     if (cachedData) {
-      this.logger.log(
-        `✅ Data attendance untuk rentang ${startDate} - ${endDate} diambil dari REDIS cache`,
-      );
+      this.logger.log(`✅ Data attendance dari REDIS untuk ${cacheKey}`);
       return JSON.parse(cachedData);
     }
 
     this.logger.log(
-      `⚠️ Cache miss! Mengambil data attendance untuk rentang ${startDate} - ${endDate} dari ODOO...`,
+      `⚠️ Cache miss! Mengambil data attendance dari ODOO untuk ${cacheKey}...`,
     );
 
     const uid = await this.odooAuthService.authenticate();
     if (!uid) throw new Error('Gagal autentikasi ke Odoo');
+
+    // Build domain filter
+    const domainFilter: any[] = [
+      ['tangal', '>=', startDate],
+      ['tangal', '<=', endDate],
+    ];
+
+    if (employeeId) {
+      domainFilter.push(['name', '=', employeeId]); // Tambahkan filter employeeId
+    }
+
+    console.log(
+      `🔍 Mencari attendance dengan filter: ${JSON.stringify(domainFilter)}`,
+    );
 
     const response = await axios.post(this.odooUrl, {
       jsonrpc: '2.0',
@@ -193,12 +208,7 @@ export class AttendanceService {
           process.env.ODOO_PASSWORD,
           'ssm.attendance',
           'search_read',
-          [
-            [
-              ['tangal', '>=', startDate],
-              ['tangal', '<=', endDate],
-            ],
-          ],
+          [domainFilter],
           {
             fields: [
               'name',
@@ -216,15 +226,11 @@ export class AttendanceService {
 
     const result = response.data.result || [];
 
-    // Simpan ke cache dengan TTL 30 menit untuk data historis
-    await this.redisService.set(
-      cacheKey,
-      JSON.stringify(result),
-      1800, // 30 menit untuk data historis
-    );
+    // Cache hasilnya
+    await this.redisService.set(cacheKey, JSON.stringify(result), 1800);
 
     this.logger.log(
-      `✅ Data ${result.length} attendance untuk rentang tanggal disimpan ke cache (TTL: 1800s)`,
+      `✅ Data ${result.length} attendance untuk ${cacheKey} disimpan ke cache`,
     );
 
     return result;

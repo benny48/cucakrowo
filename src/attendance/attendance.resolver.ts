@@ -18,4 +18,18 @@ export class AttendanceResolver {
   async createAttendance(@Args('input') input: CreateAttendanceDto) {
     return this.attendanceService.createAttendance(input);
   }
+
+  @Query(() => [Attendance])
+  async getAttendanceByDateRange(
+    @Args('startDate') startDate: string,
+    @Args('endDate') endDate: string,
+    @Args('employeeId', { type: () => Int, nullable: true })
+    employeeId?: number,
+  ): Promise<any> {
+    return this.attendanceService.getAttendanceByDateRange(
+      startDate,
+      endDate,
+      employeeId,
+    );
+  }
 }
