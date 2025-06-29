@@ -6,7 +6,7 @@ export class Attendance {
   id: number;
 
   @Field(() => [String])
-  name: string; // String representation of [id, name] array from Odoo
+  employee_id: string; // String representation of [id, name] array from Odoo
 
   @Field(() => Int, { nullable: true })
   employeeId?: number; // Extracted employee ID from name array

@@ -43,7 +43,7 @@ type EmployeeEntity {
 
 type Attendance {
   id: Int!
-  name: [String!]!
+  employee_id: [String!]!
   employeeId: Int
   employeeName: String
   nik: String
