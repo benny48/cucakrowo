@@ -54,7 +54,7 @@ export class AttendanceService {
           'create',
           [
             {
-              name: input.employeeId,
+              employee_id: input.employeeId,
               nik: input.nik,
               hari: dayOfWeek,
               tanggal_absen: formattedDate,
@@ -122,13 +122,13 @@ export class AttendanceService {
           'search_read',
           [
             [
-              ['name.id', '=', employeeId],
+              ['employee_id.id', '=', employeeId],
               ['tangal', '=', todayDate],
             ],
           ],
           {
             fields: [
-              'name',
+              'employee_id',
               'nik',
               'hari',
               'tanggal_absen',
@@ -188,7 +188,7 @@ export class AttendanceService {
     ];
 
     if (employeeId) {
-      domainFilter.push(['name', '=', employeeId]); // Tambahkan filter employeeId
+      domainFilter.push(['employee_id', '=', employeeId]); // Tambahkan filter employeeId
     }
 
     console.log(
@@ -211,7 +211,7 @@ export class AttendanceService {
           [domainFilter],
           {
             fields: [
-              'name',
+              'employee_id',
               'nik',
               'hari',
               'tanggal_absen',
