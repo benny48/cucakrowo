@@ -121,6 +121,7 @@ type Query {
 type Mutation {
   createAttendance(input: CreateAttendanceDto!): Int!
   createEmployee(name: String!, job_title: String!): Employee!
+  updateEmployeeLocation(id: Float!, latitude: Float!, longitude: Float!): Boolean!
   createLeaveRequest(employee_id: Int!, holiday_status_id: Int!, request_date_from: String!, request_date_to: String!, notes: String): LeaveEntity!
   approveLeaveRequest(id: Int!): LeaveEntity!
   refuseLeaveRequest(id: Int!): LeaveEntity!

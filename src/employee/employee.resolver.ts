@@ -27,4 +27,14 @@ export class EmployeeResolver {
   ) {
     return this.employeeService.validateEmployee(username, password);
   }
+
+  @Mutation(() => Boolean)
+  async updateEmployeeLocation(
+    @Args('id') id: number,
+    @Args('latitude') latitude: number,
+    @Args('longitude') longitude: number,
+  ) {
+    await this.employeeService.updateEmployeeLocation(id, latitude, longitude);
+    return true;
+  }
 }
