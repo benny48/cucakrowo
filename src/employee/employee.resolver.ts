@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { EmployeeService } from './employee.service';
 import { Employee } from './employee.type';
 import { EmployeeEntity } from './entities/employee.entity/employee.entity';
@@ -30,7 +30,7 @@ export class EmployeeResolver {
 
   @Mutation(() => Boolean)
   async updateEmployeeLocation(
-    @Args('id') id: number,
+    @Args('id', { type: () => Int }) id: number, // ⬅️ PASTIKAN `Int`
     @Args('latitude') latitude: number,
     @Args('longitude') longitude: number,
   ) {
