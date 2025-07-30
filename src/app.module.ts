@@ -13,6 +13,7 @@ import { RedisModule } from './redis/redis.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LeaveModule } from './leave/leave.module';
+import { RedisFlushModule } from './redis-flush/redis-flush.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { LeaveModule } from './leave/leave.module';
     ConfigModule.forRoot(),
     ScheduleModule.forRoot(),
     LeaveModule,
+    RedisFlushModule,
   ],
   controllers: [AppController],
   providers: [
