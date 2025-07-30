@@ -161,4 +161,40 @@ export class EmployeeService {
 
     return employee;
   }
+
+  async updateEmployeeLocation(
+    id: number,
+    latitude: number,
+    longitude: number,
+  ): Promise<any> {
+    this.logger.log(
+      `🛰️ Update lokasi karyawan ID ${id}: lat=${latitude}, long=${longitude}`,
+    );
+
+    const uid = await this.odooAuthService.authenticate();
+    if (!uid) throw new Error('Gagal autentikasi ke Odoo');
+
+    const response = await axios.post(this.odooUrl, {
+      jsonrpc: '2.0',
+      method: 'call',
+      id: new Date().getTime(),
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          process.env.ODOO_DB,
+          uid,
+          process.env.ODOO_PASSWORD,
+          'hr.employee',
+          'write',
+          [[id], { latitude, longitude, lock_location: true }],
+        ],
+      },
+    });
+
+    // Invalidasi cache jika ada perubahan
+    await this.redisService.del(this.EMPLOYEE_CACHE_KEY);
+    this.logger.log(`📍 Lokasi karyawan ${id} berhasil diperbarui`);
+    return response.data.result;
+  }
 }
