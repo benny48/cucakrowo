@@ -32,6 +32,7 @@ export class LeaveResolver {
     @Args('request_date_from') requestDateFrom: string,
     @Args('request_date_to') requestDateTo: string,
     @Args('notes', { nullable: true }) notes: string,
+    @Args('support_image', { nullable: true }) support_image: string,
   ) {
     return this.leaveService.createLeaveRequest(
       employeeId,
@@ -39,6 +40,7 @@ export class LeaveResolver {
       requestDateFrom,
       requestDateTo,
       notes,
+      support_image,
     );
   }
 

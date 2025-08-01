@@ -166,6 +166,7 @@ export class LeaveService {
     requestDateFrom: string,
     requestDateTo: string,
     notes: string,
+    support_image: string,
   ): Promise<any> {
     this.logger.log(
       `🔄 Membuat permintaan cuti baru untuk karyawan ID: ${employeeId}`,
@@ -216,6 +217,7 @@ export class LeaveService {
                 date_to: dateTo, // Format: YYYY-MM-DD HH:MM:SS
                 number_of_days: diffDays,
                 notes: notes,
+                support_image: support_image,
               },
             ],
           ],

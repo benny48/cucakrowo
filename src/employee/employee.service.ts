@@ -187,7 +187,10 @@ export class EmployeeService {
           process.env.ODOO_PASSWORD,
           'hr.employee',
           'write',
-          [[id], { latitude, longitude, lock_location: true }],
+          [
+            [id],
+            { latitude, longitude, lock_location: true, distance_work: 50 },
+          ],
         ],
       },
     });
