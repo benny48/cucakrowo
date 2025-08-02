@@ -123,6 +123,7 @@ export class LeaveService {
               'number_of_days',
               'state',
               'notes',
+              'support_image',
             ],
           },
         ],
@@ -310,6 +311,7 @@ export class LeaveService {
                 'number_of_days',
                 'state',
                 'notes',
+                'support_image',
               ],
             },
           ],
@@ -332,6 +334,7 @@ export class LeaveService {
           date_to: dateTo,
           number_of_days: diffDays,
           notes: notes,
+          support_image: support_image,
           state: 'confirm',
         };
       }
@@ -523,6 +526,7 @@ export class LeaveService {
               'number_of_days',
               'state',
               'notes',
+              'support_image',
             ],
           },
         ],
