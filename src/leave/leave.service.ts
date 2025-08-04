@@ -265,6 +265,7 @@ export class LeaveService {
                 date_from: dateFrom,
                 date_to: dateTo,
                 number_of_days: diffDays,
+                support_image: support_image,
               },
             ],
           ],
@@ -348,6 +349,7 @@ export class LeaveService {
         date_from: newLeave.date_from,
         date_to: newLeave.date_to,
         number_of_days: newLeave.number_of_days,
+        support_image: newLeave.support_image,
       });
 
       return {
