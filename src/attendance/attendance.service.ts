@@ -39,6 +39,26 @@ export class AttendanceService {
     const tanggal = this.convertToDateOnly(input.tanggal_absen);
     const base64Image = this.cleanBase64(input.attendace_image);
 
+    // Siapkan payload attendance
+    const attendancePayload: any = {
+      employee_id: input.employeeId,
+      nik: input.nik,
+      hari: dayOfWeek,
+      tanggal_absen: formattedDate,
+      time: timeInFloat,
+      tangal: tanggal,
+      punching_type: input.punching_type,
+      attendace_image: base64Image,
+    };
+
+    // Atur field late dan late_reason sesuai kondisi
+    if (input.late_reason && input.late_reason.trim() !== '') {
+      attendancePayload.late = true;
+      attendancePayload.late_reason = input.late_reason;
+    } else {
+      attendancePayload.late = false;
+    }
+
     const response = await axios.post(this.odooUrl, {
       jsonrpc: '2.0',
       method: 'call',
@@ -52,18 +72,7 @@ export class AttendanceService {
           process.env.ODOO_PASSWORD,
           'ssm.attendance',
           'create',
-          [
-            {
-              employee_id: input.employeeId,
-              nik: input.nik,
-              hari: dayOfWeek,
-              tanggal_absen: formattedDate,
-              time: timeInFloat,
-              tangal: tanggal,
-              punching_type: input.punching_type,
-              attendace_image: base64Image,
-            },
-          ],
+          [attendancePayload],
         ],
       },
     });
