@@ -40,4 +40,7 @@ export class LeaveEntity {
 
   @Field({ description: 'Leave type name', nullable: true })
   leave_type_name: string;
+
+  @Field({ description: 'Images', nullable: true })
+  support_image: string;
 }
