@@ -136,6 +136,6 @@ input CreateAttendanceDto {
   punching_type: String!
   tanggal_absen: String!
   attendace_image: String!
-  late: Boolean
-  late_reason: String
+  late: Boolean!
+  late_reason: String!
 }

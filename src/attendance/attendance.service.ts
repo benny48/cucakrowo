@@ -52,11 +52,12 @@ export class AttendanceService {
     };
 
     // Atur field late dan late_reason sesuai kondisi
-    if (input.late_reason && input.late_reason.trim() !== '') {
+    if (input.late && input.late_reason && input.late_reason.trim() !== '') {
       attendancePayload.late = true;
-      attendancePayload.late_reason = input.late_reason;
+      attendancePayload.late_reason = input.late_reason.trim();
     } else {
       attendancePayload.late = false;
+      attendancePayload.late_reason = null;
     }
 
     const response = await axios.post(this.odooUrl, {
