@@ -17,9 +17,9 @@ export class CreateAttendanceDto {
   @Field(() => String)
   attendace_image: string;
 
-  @Field(() => Boolean, { nullable: true })
-  late?: boolean;
+  @Field(() => Boolean)
+  late: boolean;
 
-  @Field(() => String, { nullable: true })
-  late_reason?: string;
+  @Field(() => String)
+  late_reason: string;
 }

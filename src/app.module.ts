@@ -14,6 +14,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { LeaveModule } from './leave/leave.module';
 import { RedisFlushModule } from './redis-flush/redis-flush.module';
+import { S3Service } from './s3/s3.service';
+import { S3Controller } from './s3/s3.controller';
 
 @Module({
   imports: [
@@ -29,12 +31,13 @@ import { RedisFlushModule } from './redis-flush/redis-flush.module';
     LeaveModule,
     RedisFlushModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, S3Controller],
   providers: [
     AppService,
     OdooAuthService,
     AttendanceService,
     AttendanceResolver,
+    S3Service,
   ],
 })
 export class AppModule {}
