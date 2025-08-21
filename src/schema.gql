@@ -105,6 +105,45 @@ type LeaveEntity {
   support_image: String
 }
 
+type PayrollType {
+  id: Int!
+  employeeId: Int
+  employeeName: String
+  periodId: Int
+  periodName: String
+  tahun: String
+  periodDate: String
+  payDate: String
+  idDse: String
+  nama: String
+  jabatan: String
+  hariKerja: Int
+  statusKaryawan: EmployeeStatus
+  npwp: String
+  noRekening: String
+  microCluster: String
+  partnerName: String
+  currencyId: Int
+  currencyName: String
+  gapok70: Float
+  gapok30: Float
+  transportasi: Float
+  pulsa: Float
+  gross: Float
+  pph21: Float
+  bpjsKetenagakerjaan: Float
+  bpjsKesehatan: Float
+  biayaAdmPayrollNonMandiri: Float
+  totalPotongan: Float
+  thp: Float
+  paylink: String
+}
+
+enum EmployeeStatus {
+  active
+  inactive
+}
+
 type Query {
   getAttendanceByEmployeeIdToday(employeeId: Int!): [Attendance!]!
   getAttendanceByDateRange(startDate: String!, endDate: String!, employeeId: Int): [Attendance!]!
@@ -119,6 +158,7 @@ type Query {
   leaves(employee_id: Int): [LeaveEntity!]!
   leaveTypes: [LeaveType!]!
   leave(id: Int!): LeaveEntity!
+  payrollByMonthYear(year: Int!, monthName: String, employeeId: Int, limit: Int, offset: Int): [PayrollType!]!
 }
 
 type Mutation {

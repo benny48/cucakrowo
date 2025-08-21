@@ -16,6 +16,7 @@ import { LeaveModule } from './leave/leave.module';
 import { RedisFlushModule } from './redis-flush/redis-flush.module';
 import { S3Service } from './s3/s3.service';
 import { S3Controller } from './s3/s3.controller';
+import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { S3Controller } from './s3/s3.controller';
     ScheduleModule.forRoot(),
     LeaveModule,
     RedisFlushModule,
+    PayrollModule,
   ],
   controllers: [AppController, S3Controller],
   providers: [

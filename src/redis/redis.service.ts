@@ -115,4 +115,53 @@ export class RedisService {
       this.logger.error(`❌ Redis FLUSHALL error: ${error.message}`);
     }
   }
+
+  // tambahkan di RedisService
+  async delPattern(pattern: string): Promise<number> {
+    try {
+      this.logger.debug(`🧹 DELPATTERN start: ${pattern}`);
+      let cursor = '0';
+      let totalRemoved = 0;
+
+      do {
+        // SCAN agar tidak blocking seperti KEYS
+        const [nextCursor, keys] = await this.redisClient.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          '1000',
+        );
+        cursor = nextCursor;
+
+        if (keys.length > 0) {
+          // gunakan UNLINK (non-blocking) jika tersedia, fallback ke DEL
+          const pipeline = this.redisClient.pipeline();
+          for (const k of keys) {
+            // @ts-ignore ioredis punya unlink; kalau tidak ada akan jatuh ke del
+            if (typeof (this.redisClient as any).unlink === 'function') {
+              (pipeline as any).unlink(k);
+            } else {
+              pipeline.del(k);
+            }
+          }
+          const res = await pipeline.exec();
+          totalRemoved += res?.length ?? 0;
+          this.logger.debug(
+            `🧹 DELPATTERN batch: ${keys.length} keys for ${pattern}`,
+          );
+        }
+      } while (cursor !== '0');
+
+      this.logger.log(
+        `✅ DELPATTERN done: ${totalRemoved} keys removed for ${pattern}`,
+      );
+      return totalRemoved;
+    } catch (error: any) {
+      this.logger.error(
+        `❌ Redis DELPATTERN error untuk pattern ${pattern}: ${error.message}`,
+      );
+      return 0;
+    }
+  }
 }
