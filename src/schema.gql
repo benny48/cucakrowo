@@ -173,9 +173,16 @@ type Mutation {
 input CreateAttendanceDto {
   employeeId: Int!
   nik: String!
-  punching_type: String!
-  tanggal_absen: String!
+  punching_type: String
+  tanggal_absen: String
   attendace_image: String!
-  late: Boolean!
-  late_reason: String!
+  late: Boolean
+  late_reason: String
+  latitude: Float
+  longitude: Float
+  accuracy: Float
+  is_mock_location: Boolean
+  location_provider: String
+  device_location_time: String
+  mobile_id: String
 }
