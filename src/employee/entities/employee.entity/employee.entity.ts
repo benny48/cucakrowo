@@ -1,6 +1,6 @@
 import { ObjectType, Field, Int } from '@nestjs/graphql';
 
-@ObjectType({ description: 'Employee Entity' }) // Menambahkan deskripsi
+@ObjectType({ description: 'Employee Entity' })
 export class EmployeeEntity {
   @Field(() => Int, { description: 'Unique ID' })
   id: number;
@@ -26,9 +26,15 @@ export class EmployeeEntity {
   @Field({ description: 'Lock Location' })
   lock_location: string;
 
-  @Field({ description: 'Mobile ID of the Employee' })
-  mobile_id: string;
+  @Field({ description: 'Mobile ID of the Employee', nullable: true })
+  mobile_id?: string;
 
   @Field({ description: 'Distance from work location' })
   distance_work: string;
+
+  @Field({
+    description: 'Required backend app version',
+    nullable: true,
+  })
+  app_version?: string;
 }
