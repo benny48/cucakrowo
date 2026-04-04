@@ -7,5 +7,6 @@ import { RedisModule } from '../redis/redis.module';
 @Module({
   imports: [RedisModule],
   providers: [EmployeeService, EmployeeResolver, OdooAuthService],
+  exports: [EmployeeService],
 })
 export class EmployeeModule {}

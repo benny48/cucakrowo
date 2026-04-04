@@ -4,6 +4,7 @@ import { OdooAuthService } from '../odoo-auth/odoo-auth.service';
 import { RedisService } from '../redis/redis.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto/create-attendance.dto';
 import * as moment from 'moment-timezone';
+import { EmployeeService } from '../employee/employee.service';
 
 @Injectable()
 export class AttendanceService {
@@ -12,12 +13,16 @@ export class AttendanceService {
   constructor(
     private readonly odooAuthService: OdooAuthService,
     private readonly redisService: RedisService,
+    private readonly employeeService: EmployeeService,
   ) {}
 
   private readonly odooUrl = process.env.ODOO_URL;
-  private readonly ATTENDANCE_CACHE_TTL = 900; // 15 menit dalam detik
+  private readonly ATTENDANCE_CACHE_TTL = 900; // 15 menit
+  private readonly DEFAULT_MAX_ACCURACY_METERS = Number(
+    process.env.MAX_LOCATION_ACCURACY_METERS || 50,
+  );
+  private readonly DEFAULT_LATE_LIMIT = process.env.LATE_LIMIT || '08:05';
 
-  // Helper untuk membuat kunci cache berdasarkan employeeId dan tanggal
   private getAttendanceCacheKey(employeeId: number, date?: string): string {
     const formattedDate =
       date || moment().tz('Asia/Jakarta').format('YYYY-MM-DD');
@@ -32,14 +37,62 @@ export class AttendanceService {
     const uid = await this.odooAuthService.authenticate();
     if (!uid) throw new Error('Gagal autentikasi ke Odoo');
 
-    // Convert input tanggal_absen (WIB) to UTC before sending to Odoo
-    const formattedDate = this.convertWIBtoUTC(input.tanggal_absen);
-    const dayOfWeek = this.getDayOfWeek(input.tanggal_absen);
-    const timeInFloat = this.convertTimeToFloat(input.tanggal_absen);
-    const tanggal = this.convertToDateOnly(input.tanggal_absen);
+    const nowJakarta = moment().tz('Asia/Jakarta');
+    const formattedDate = nowJakarta
+      .clone()
+      .utc()
+      .format('YYYY-MM-DD HH:mm:ss');
+    const dayOfWeek = this.translateDayToIndonesian(nowJakarta.format('dddd'));
+    const timeInFloat = nowJakarta.hours() + nowJakarta.minutes() / 60;
+    const tanggal = nowJakarta.format('YYYY-MM-DD');
     const base64Image = this.cleanBase64(input.attendace_image);
 
-    // Siapkan payload attendance
+    // Ambil employee resmi dari Odoo
+    const employee = await this.employeeService.getEmployeeById(
+      input.employeeId,
+    );
+
+    // Validasi mobile_id jika tersedia
+    if (
+      employee?.mobile_id &&
+      input.mobile_id &&
+      String(employee.mobile_id).trim() !== String(input.mobile_id).trim()
+    ) {
+      this.logger.warn(
+        `❌ Mobile ID tidak cocok untuk employee ${input.employeeId}. expected=${employee.mobile_id}, actual=${input.mobile_id}`,
+      );
+      throw new Error('Perangkat tidak terdaftar untuk absensi');
+    }
+
+    // Cegah lebih dari 2 absensi per hari
+    const existingAttendance = await this.getAttendanceByEmployeeIdToday(
+      input.employeeId,
+    );
+    if (existingAttendance.length >= 2) {
+      this.logger.warn(
+        `❌ Employee ${input.employeeId} sudah memiliki ${existingAttendance.length} absensi hari ini`,
+      );
+      throw new Error('Anda sudah melakukan absensi maksimal hari ini');
+    }
+
+    // Tentukan punching_type bila perlu
+    const punchingType =
+      input.punching_type ?? (existingAttendance.length === 0 ? '0' : '1');
+
+    // Validasi urutan sederhana
+    if (existingAttendance.length === 1) {
+      const existingType = String(existingAttendance[0]?.punching_type ?? '');
+      if (existingType === punchingType) {
+        throw new Error('Urutan absensi tidak valid');
+      }
+    }
+
+    // Validasi lokasi ketat jika employee lock lokasi
+    await this.validateAttendanceLocationStrict(input, employee);
+
+    // Hitung telat di backend
+    const lateInfo = this.computeLateInfo(nowJakarta, punchingType, input);
+
     const attendancePayload: any = {
       employee_id: input.employeeId,
       nik: input.nik,
@@ -47,17 +100,27 @@ export class AttendanceService {
       tanggal_absen: formattedDate,
       time: timeInFloat,
       tangal: tanggal,
-      punching_type: input.punching_type,
+      punching_type: punchingType,
       attendace_image: base64Image,
+      late: lateInfo.late,
+      late_reason: lateInfo.lateReason,
     };
 
-    // Atur field late dan late_reason sesuai kondisi
-    if (input.late && input.late_reason && input.late_reason.trim() !== '') {
-      attendancePayload.late = true;
-      attendancePayload.late_reason = input.late_reason.trim();
-    } else {
-      attendancePayload.late = false;
-      attendancePayload.late_reason = null;
+    // Simpan metadata tambahan kalau field Odoo tersedia
+    if (typeof input.latitude === 'number')
+      attendancePayload.latitude = input.latitude;
+    if (typeof input.longitude === 'number')
+      attendancePayload.longitude = input.longitude;
+    if (typeof input.accuracy === 'number')
+      attendancePayload.location_accuracy = input.accuracy;
+    if (typeof input.is_mock_location === 'boolean') {
+      attendancePayload.is_mock_location = input.is_mock_location;
+    }
+    if (input.location_provider) {
+      attendancePayload.location_provider = input.location_provider;
+    }
+    if (input.device_location_time) {
+      attendancePayload.device_location_time = input.device_location_time;
     }
 
     const response = await axios.post(this.odooUrl, {
@@ -84,7 +147,6 @@ export class AttendanceService {
       throw new Error('Gagal membuat attendance');
     }
 
-    // Invalidasi cache untuk employee ini pada hari ini
     const cacheKey = this.getAttendanceCacheKey(input.employeeId);
     await this.redisService.del(cacheKey);
     this.logger.log(
@@ -94,9 +156,7 @@ export class AttendanceService {
     return result;
   }
 
-  // Fungsi untuk mendapatkan data absensi berdasarkan employee ID dan tanggal hari ini
   async getAttendanceByEmployeeIdToday(employeeId: number): Promise<any> {
-    // Cek cache terlebih dahulu
     const cacheKey = this.getAttendanceCacheKey(employeeId);
     const cachedAttendance = await this.redisService.get(cacheKey);
 
@@ -114,7 +174,6 @@ export class AttendanceService {
     const uid = await this.odooAuthService.authenticate();
     if (!uid) throw new Error('Gagal autentikasi ke Odoo');
 
-    // Mendapatkan tanggal hari ini dalam format YYYY-MM-DD
     const todayDate = moment().tz('Asia/Jakarta').format('YYYY-MM-DD');
 
     const response = await axios.post(this.odooUrl, {
@@ -146,7 +205,10 @@ export class AttendanceService {
               'tangal',
               'punching_type',
               'attendace_image',
+              'late',
+              'late_reason',
             ],
+            order: 'tanggal_absen asc',
           },
         ],
       },
@@ -154,7 +216,6 @@ export class AttendanceService {
 
     const result = response.data.result || [];
 
-    // Simpan ke cache dengan TTL 15 menit
     await this.redisService.set(
       cacheKey,
       JSON.stringify(result),
@@ -168,11 +229,10 @@ export class AttendanceService {
     return result;
   }
 
-  // Tambahan: fungsi untuk mendapatkan semua attendance berdasarkan rentang tanggal
   async getAttendanceByDateRange(
     startDate: string,
     endDate: string,
-    employeeId?: number, // Tambahan optional
+    employeeId?: number,
   ): Promise<any> {
     const cacheKey = employeeId
       ? `attendance:range:${startDate}:${endDate}:emp:${employeeId}`
@@ -191,19 +251,14 @@ export class AttendanceService {
     const uid = await this.odooAuthService.authenticate();
     if (!uid) throw new Error('Gagal autentikasi ke Odoo');
 
-    // Build domain filter
     const domainFilter: any[] = [
       ['tangal', '>=', startDate],
       ['tangal', '<=', endDate],
     ];
 
     if (employeeId) {
-      domainFilter.push(['employee_id', '=', employeeId]); // Tambahkan filter employeeId
+      domainFilter.push(['employee_id', '=', employeeId]);
     }
-
-    console.log(
-      `🔍 Mencari attendance dengan filter: ${JSON.stringify(domainFilter)}`,
-    );
 
     const response = await axios.post(this.odooUrl, {
       jsonrpc: '2.0',
@@ -228,6 +283,8 @@ export class AttendanceService {
               'time',
               'tangal',
               'punching_type',
+              'late',
+              'late_reason',
             ],
           },
         ],
@@ -236,7 +293,6 @@ export class AttendanceService {
 
     const result = response.data.result || [];
 
-    // Cache hasilnya
     await this.redisService.set(cacheKey, JSON.stringify(result), 1800);
 
     this.logger.log(
@@ -246,40 +302,116 @@ export class AttendanceService {
     return result;
   }
 
-  // Hapus prefix "data:image/...;base64,"
+  private async validateAttendanceLocationStrict(
+    input: CreateAttendanceDto,
+    employee: any,
+  ): Promise<void> {
+    const lockLocation = this.toBoolean(employee?.lock_location);
+
+    if (!lockLocation) {
+      this.logger.log(
+        `ℹ️ Employee ${input.employeeId} tidak menggunakan lock location`,
+      );
+      return;
+    }
+
+    const officeLat = this.toNumber(employee?.latitude);
+    const officeLon = this.toNumber(employee?.longitude);
+    const allowedDistance = this.toNumber(employee?.distance_work) ?? 50;
+
+    if (officeLat === null || officeLon === null) {
+      this.logger.warn(
+        `❌ Lokasi referensi employee ${input.employeeId} belum diset`,
+      );
+      throw new Error('Lokasi referensi karyawan belum dikonfigurasi');
+    }
+
+    if (input.is_mock_location === true) {
+      this.logger.warn(
+        `❌ Mock location flag diterima dari client untuk employee ${input.employeeId}`,
+      );
+      throw new Error('Mock location terdeteksi');
+    }
+
+    const actualLat = this.toNumber(input.latitude);
+    const actualLon = this.toNumber(input.longitude);
+    const accuracy = this.toNumber(input.accuracy);
+
+    if (actualLat === null || actualLon === null) {
+      this.logger.warn(
+        `❌ Koordinat absensi kosong untuk employee ${input.employeeId}`,
+      );
+      throw new Error('Lokasi absensi tidak valid');
+    }
+
+    if (accuracy !== null && accuracy > this.DEFAULT_MAX_ACCURACY_METERS) {
+      this.logger.warn(
+        `❌ Accuracy terlalu buruk untuk employee ${input.employeeId}: ${accuracy}m`,
+      );
+      throw new Error(
+        `Akurasi lokasi terlalu rendah. Maksimal ${this.DEFAULT_MAX_ACCURACY_METERS} meter`,
+      );
+    }
+
+    const distanceMeters = this.calculateDistanceMeters(
+      actualLat,
+      actualLon,
+      officeLat,
+      officeLon,
+    );
+
+    this.logger.log(
+      `📍 Validasi lokasi employee ${input.employeeId}: actual=(${actualLat},${actualLon}) office=(${officeLat},${officeLon}) distance=${distanceMeters.toFixed(2)}m allowed=${allowedDistance}m accuracy=${accuracy ?? 'n/a'}m`,
+    );
+
+    if (distanceMeters > allowedDistance) {
+      throw new Error(
+        `Anda berada di luar radius absensi. Jarak ${distanceMeters.toFixed(1)} meter, maksimal ${allowedDistance} meter`,
+      );
+    }
+  }
+
+  private computeLateInfo(
+    nowJakarta: moment.Moment,
+    punchingType: string,
+    input: CreateAttendanceDto,
+  ): { late: boolean; lateReason: string | null } {
+    // hanya check-in
+    if (String(punchingType) !== '0') {
+      return { late: false, lateReason: null };
+    }
+
+    const [hourStr, minuteStr] = this.DEFAULT_LATE_LIMIT.split(':');
+    const lateLimit = nowJakarta
+      .clone()
+      .hour(Number(hourStr))
+      .minute(Number(minuteStr))
+      .second(0)
+      .millisecond(0);
+
+    const isLate = nowJakarta.isAfter(lateLimit);
+    const reason = input.late_reason?.trim() || null;
+
+    if (isLate && !reason) {
+      throw new Error(
+        `Check-in terlambat. Alasan wajib diisi jika lewat ${this.DEFAULT_LATE_LIMIT}`,
+      );
+    }
+
+    return {
+      late: isLate,
+      lateReason: isLate ? reason : null,
+    };
+  }
+
   private cleanBase64(base64String: string): string {
+    if (!base64String) return base64String;
     if (base64String.includes('base64,')) {
-      return base64String.split('base64,')[1]; // hanya base64 tanpa prefix
+      return base64String.split('base64,')[1];
     }
     return base64String;
   }
 
-  // Function to convert local WIB time (DD/MM/YYYY HH:mm:ss) to UTC
-  private convertWIBtoUTC(date: string): string {
-    // Parse the input date (DD/MM/YYYY HH:mm:ss)
-    const parsedDate = moment(date, 'DD/MM/YYYY HH:mm:ss');
-
-    // Convert to UTC by subtracting 7 hours (WIB -> UTC)
-    const utcDate = parsedDate.subtract(7, 'hours'); // Convert WIB to UTC
-
-    // Format the UTC time to the required format (YYYY-MM-DD HH:mm:ss)
-    return utcDate.format('YYYY-MM-DD HH:mm:ss'); // Return UTC time
-  }
-
-  // Function to get the day of the week from the input date in Indonesian
-  private getDayOfWeek(date: string): string {
-    // Parse the input date (DD/MM/YYYY)
-    const parsedDate = moment(date, 'DD/MM/YYYY HH:mm:ss');
-
-    // Mapping day of the week in English to Indonesian
-    const dayOfWeekInEnglish = parsedDate.format('dddd');
-    const dayOfWeekInIndonesian =
-      this.translateDayToIndonesian(dayOfWeekInEnglish);
-
-    return dayOfWeekInIndonesian; // Return day of the week in Indonesian
-  }
-
-  // Function to translate English day of the week to Indonesian
   private translateDayToIndonesian(day: string): string {
     const daysInIndonesian = {
       Sunday: 'Minggu',
@@ -291,33 +423,46 @@ export class AttendanceService {
       Saturday: 'Sabtu',
     };
 
-    return daysInIndonesian[day] || day; // Return the translated day
+    return daysInIndonesian[day] || day;
   }
 
-  // Function to convert time into float (hours in decimal format)
-  private convertTimeToFloat(date: string): number {
-    // Parse the input date (DD/MM/YYYY HH:mm:ss)
-    const parsedDate = moment(date, 'DD/MM/YYYY HH:mm:ss');
-
-    // Extract hours and minutes
-    const hours = parsedDate.hour();
-    const minutes = parsedDate.minute();
-
-    // Convert minutes to decimal
-    const minutesInDecimal = minutes / 60;
-
-    // Combine hours and decimal minutes
-    const timeInFloat = hours + minutesInDecimal;
-
-    return timeInFloat; // Return time as float
+  private toBoolean(value: any): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      return ['true', '1', 'yes'].includes(value.toLowerCase());
+    }
+    if (typeof value === 'number') return value === 1;
+    return false;
   }
 
-  // Function to convert date to YYYY-MM-DD (Date Only)
-  private convertToDateOnly(date: string): string {
-    // Parse the input date (DD/MM/YYYY HH:mm:ss)
-    const parsedDate = moment(date, 'DD/MM/YYYY HH:mm:ss');
+  private toNumber(value: any): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
 
-    // Return the date part in format YYYY-MM-DD
-    return parsedDate.format('YYYY-MM-DD'); // Return date only (no time)
+  private calculateDistanceMeters(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371000; // meter
+    const dLat = this.degToRad(lat2 - lat1);
+    const dLon = this.degToRad(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.degToRad(lat1)) *
+        Math.cos(this.degToRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  private degToRad(value: number): number {
+    return value * (Math.PI / 180);
   }
 }
