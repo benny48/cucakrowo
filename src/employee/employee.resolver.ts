@@ -24,13 +24,19 @@ export class EmployeeResolver {
   async validateEmployee(
     @Args('username', { description: 'Trainer username' }) username: string,
     @Args('password', { description: 'Trainer password' }) password: string,
+    @Args('appVersion', { description: 'Mobile app version' })
+    appVersion: string,
   ) {
-    return this.employeeService.validateEmployee(username, password);
+    return this.employeeService.validateEmployee(
+      username,
+      password,
+      appVersion,
+    );
   }
 
   @Mutation(() => Boolean)
   async updateEmployeeLocation(
-    @Args('id', { type: () => Int }) id: number, // ⬅️ PASTIKAN `Int`
+    @Args('id', { type: () => Int }) id: number,
     @Args('latitude') latitude: number,
     @Args('longitude') longitude: number,
   ) {
