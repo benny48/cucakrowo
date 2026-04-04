@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import axios from 'axios';
 import { OdooAuthService } from '../odoo-auth/odoo-auth.service';
 import { RedisService } from '../redis/redis.service';
@@ -15,13 +15,49 @@ export class EmployeeService {
   private readonly odooUrl = process.env.ODOO_URL;
   private readonly CACHE_TTL = 3600; // 1 jam
   private readonly EMPLOYEE_CACHE_KEY = 'employees:all';
+  private readonly MOBILE_APP_VERSION = process.env.MOBILE_APP_VERSION || '';
+  private readonly MOBILE_APP_FORCE_UPDATE =
+    String(process.env.MOBILE_APP_FORCE_UPDATE || 'true').toLowerCase() ===
+    'true';
 
   private getEmployeeByIdCacheKey(id: number): string {
     return `employee:id:${id}`;
   }
 
-  private getValidateCacheKey(username: string): string {
-    return `employee:validate:${username}`;
+  private getValidateCacheKey(username: string, appVersion?: string): string {
+    return `employee:validate:${username}:${appVersion || 'no_version'}`;
+  }
+
+  private assertMobileVersion(appVersion?: string): void {
+    if (!this.MOBILE_APP_FORCE_UPDATE) {
+      return;
+    }
+
+    const clientVersion = String(appVersion || '').trim();
+    const serverVersion = String(this.MOBILE_APP_VERSION || '').trim();
+
+    if (!serverVersion) {
+      this.logger.warn(
+        '⚠️ MOBILE_APP_VERSION belum diset, pengecekan versi dilewati',
+      );
+      return;
+    }
+
+    if (!clientVersion) {
+      this.logger.warn('❌ Client tidak mengirim appVersion');
+      throw new UnauthorizedException(
+        `Versi aplikasi wajib dikirim. Gunakan versi ${serverVersion}`,
+      );
+    }
+
+    if (clientVersion !== serverVersion) {
+      this.logger.warn(
+        `❌ Versi aplikasi tidak cocok. client=${clientVersion}, server=${serverVersion}`,
+      );
+      throw new UnauthorizedException(
+        `Versi aplikasi tidak didukung. Gunakan versi ${serverVersion}`,
+      );
+    }
   }
 
   async getEmployees(): Promise<any[]> {
@@ -185,8 +221,14 @@ export class EmployeeService {
     return newEmployee;
   }
 
-  async validateEmployee(username: string, password: string): Promise<any> {
-    const cacheKey = this.getValidateCacheKey(username);
+  async validateEmployee(
+    username: string,
+    password: string,
+    appVersion?: string,
+  ): Promise<any> {
+    this.assertMobileVersion(appVersion);
+
+    const cacheKey = this.getValidateCacheKey(username, appVersion);
     const cachedEmployee = await this.redisService.get(cacheKey);
 
     if (cachedEmployee) {
@@ -195,7 +237,10 @@ export class EmployeeService {
       );
       const employee = JSON.parse(cachedEmployee);
       if (employee.password === password) {
-        return employee;
+        return {
+          ...employee,
+          app_version: this.MOBILE_APP_VERSION,
+        };
       }
       this.logger.log(
         `⚠️ Password tidak cocok untuk cached user ${username}, mencoba dari sumber data`,
@@ -224,7 +269,10 @@ export class EmployeeService {
       `✅ Data validasi untuk ${username} disimpan ke cache (TTL: 1800s)`,
     );
 
-    return employee;
+    return {
+      ...employee,
+      app_version: this.MOBILE_APP_VERSION,
+    };
   }
 
   async updateEmployeeLocation(
