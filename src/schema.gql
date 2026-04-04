@@ -154,6 +154,9 @@ type Query {
 
     """Trainer password"""
     password: String!
+
+    """Mobile app version"""
+    appVersion: String!
   ): EmployeeEntity!
   leaves(employee_id: Int): [LeaveEntity!]!
   leaveTypes: [LeaveType!]!
