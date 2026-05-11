@@ -35,10 +35,13 @@ type EmployeeEntity {
   lock_location: String!
 
   """Mobile ID of the Employee"""
-  mobile_id: String!
+  mobile_id: String
 
   """Distance from work location"""
   distance_work: String!
+
+  """Required backend app version"""
+  app_version: String
 }
 
 type Attendance {
