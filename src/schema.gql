@@ -160,7 +160,8 @@ type ContractEntity {
 
 type Query {
   getAttendanceByEmployeeIdToday(employeeId: Int!): [Attendance!]!
-  getAttendanceByDateRange(startDate: String!, endDate: String!, employeeId: Int): [Attendance!]!
+  getAttendanceByDateRange(startDate: String!, endDate: String!): [Attendance!]!
+  getAttendanceByEmployeeIdAndDateRange(employeeId: Int!, startDate: String!, endDate: String!): [Attendance!]!
   employees: [Employee!]!
   validateEmployee(
     """Trainer username"""

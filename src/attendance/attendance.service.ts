@@ -29,6 +29,32 @@ export class AttendanceService {
     return `attendance:employee:${employeeId}:date:${formattedDate}`;
   }
 
+  // Helper untuk memastikan field name adalah array
+  private ensureNameIsArray(data: any): any {
+    if (Array.isArray(data)) {
+      return data.map((item) => {
+        if (Array.isArray(item.name)) {
+          return item; // sudah array
+        } else {
+          return {
+            ...item,
+            name: [String(item.name), `Employee ${item.name}`],
+          };
+        }
+      });
+    } else {
+      // single object
+      if (Array.isArray(data.name)) {
+        return data; // sudah array
+      } else {
+        return {
+          ...data,
+          name: [String(data.name), `Employee ${data.name}`],
+        };
+      }
+    }
+  }
+
   async createAttendance(input: CreateAttendanceDto): Promise<any> {
     this.logger.log(
       `🔄 Membuat attendance baru untuk karyawan ID: ${input.employeeId}`,
@@ -164,7 +190,8 @@ export class AttendanceService {
       this.logger.log(
         `✅ Data attendance untuk karyawan ID ${employeeId} diambil dari REDIS cache`,
       );
-      return JSON.parse(cachedAttendance);
+      const parsed = JSON.parse(cachedAttendance);
+      return this.ensureNameIsArray(parsed);
     }
 
     this.logger.log(
@@ -226,7 +253,8 @@ export class AttendanceService {
       `✅ Data ${result.length} attendance untuk karyawan ID ${employeeId} disimpan ke cache (TTL: ${this.ATTENDANCE_CACHE_TTL}s)`,
     );
 
-    return result;
+    // Pastikan name adalah array sebelum return
+    return this.ensureNameIsArray(result);
   }
 
   async getAttendanceByDateRange(
@@ -240,8 +268,11 @@ export class AttendanceService {
     const cachedData = await this.redisService.get(cacheKey);
 
     if (cachedData) {
-      this.logger.log(`✅ Data attendance dari REDIS untuk ${cacheKey}`);
-      return JSON.parse(cachedData);
+      this.logger.log(
+        `✅ Data attendance untuk rentang ${startDate} - ${endDate} diambil dari REDIS cache`,
+      );
+      const parsed = JSON.parse(cachedData);
+      return this.ensureNameIsArray(parsed);
     }
 
     this.logger.log(
@@ -299,7 +330,85 @@ export class AttendanceService {
       `✅ Data ${result.length} attendance untuk ${cacheKey} disimpan ke cache`,
     );
 
-    return result;
+    // Pastikan name adalah array sebelum return
+    return this.ensureNameIsArray(result);
+  }
+
+  // Fungsi untuk mendapatkan attendance berdasarkan employee ID dan rentang tanggal
+  async getAttendanceByEmployeeIdAndDateRange(
+    employeeId: number,
+    startDate: string,
+    endDate: string,
+  ): Promise<any> {
+    const cacheKey = `attendance:employee:${employeeId}:range:${startDate}:${endDate}`;
+    const cachedData = await this.redisService.get(cacheKey);
+
+    if (cachedData) {
+      this.logger.log(
+        `✅ Data attendance untuk employee ${employeeId} rentang ${startDate} - ${endDate} diambil dari REDIS cache`,
+      );
+      const parsed = JSON.parse(cachedData);
+      return this.ensureNameIsArray(parsed);
+    }
+
+    this.logger.log(
+      `⚠️ Cache miss! Mengambil data attendance untuk employee ${employeeId} rentang ${startDate} - ${endDate} dari ODOO...`,
+    );
+
+    const uid = await this.odooAuthService.authenticate();
+    if (!uid) throw new Error('Gagal autentikasi ke Odoo');
+
+    const response = await axios.post(this.odooUrl, {
+      jsonrpc: '2.0',
+      method: 'call',
+      id: new Date().getTime(),
+      params: {
+        service: 'object',
+        method: 'execute_kw',
+        args: [
+          process.env.ODOO_DB,
+          uid,
+          process.env.ODOO_PASSWORD,
+          'ssm.attendance',
+          'search_read',
+          [
+            [
+              ['name.id', '=', employeeId],
+              ['tangal', '>=', startDate],
+              ['tangal', '<=', endDate],
+            ],
+          ],
+          {
+            fields: [
+              'name',
+              'nik',
+              'hari',
+              'tanggal_absen',
+              'time',
+              'tangal',
+              'punching_type',
+              'attendace_image',
+            ],
+          },
+        ],
+      },
+    });
+
+    const result = response.data.result || [];
+
+    // Simpan ke cache dengan TTL 30 menit untuk data historis
+    await this.redisService.set(
+      cacheKey,
+      JSON.stringify(result),
+      1800, // 30 menit untuk data historis
+    );
+
+    this.logger.log(
+      `✅ Data ${result.length} attendance untuk employee ${employeeId} rentang ${startDate} - ${endDate} disimpan ke cache (TTL: 1800s)`,
+    );
+
+    // Pastikan name adalah array sebelum return
+    return this.ensureNameIsArray(result);
   }
 
   private async validateAttendanceLocationStrict(
