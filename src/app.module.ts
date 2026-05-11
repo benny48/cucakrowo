@@ -17,7 +17,6 @@ import { RedisFlushModule } from './redis-flush/redis-flush.module';
 import { S3Service } from './s3/s3.service';
 import { S3Controller } from './s3/s3.controller';
 import { PayrollModule } from './payroll/payroll.module';
-import { ContractModule } from './contract/contract.module';
 
 @Module({
   imports: [
@@ -33,7 +32,6 @@ import { ContractModule } from './contract/contract.module';
     LeaveModule,
     RedisFlushModule,
     PayrollModule,
-    ContractModule,
   ],
   controllers: [AppController, S3Controller],
   providers: [
