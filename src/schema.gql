@@ -147,6 +147,17 @@ enum EmployeeStatus {
   inactive
 }
 
+type ContractEntity {
+  id: Int!
+  name: String!
+  employee_id: Int
+  state: String
+  letter_url: String
+  signed_letter_url: String
+  date_start: String
+  date_end: String
+}
+
 type Query {
   getAttendanceByEmployeeIdToday(employeeId: Int!): [Attendance!]!
   getAttendanceByDateRange(startDate: String!, endDate: String!, employeeId: Int): [Attendance!]!
@@ -165,6 +176,9 @@ type Query {
   leaveTypes: [LeaveType!]!
   leave(id: Int!): LeaveEntity!
   payrollByMonthYear(year: Int!, monthName: String, employeeId: Int, limit: Int, offset: Int): [PayrollType!]!
+  latestContract(employee_id: Int!): ContractEntity!
+  getLetterUrl(employee_id: Int!): String
+  getSignedLetterUrl(employee_id: Int!): String
 }
 
 type Mutation {
@@ -174,6 +188,7 @@ type Mutation {
   createLeaveRequest(employee_id: Int!, holiday_status_id: Int!, request_date_from: String!, request_date_to: String!, notes: String, support_image: String): LeaveEntity!
   approveLeaveRequest(id: Int!): LeaveEntity!
   refuseLeaveRequest(id: Int!): LeaveEntity!
+  uploadSignedLetterUrl(employee_id: Int!, signed_letter_url: String!): String!
 }
 
 input CreateAttendanceDto {
